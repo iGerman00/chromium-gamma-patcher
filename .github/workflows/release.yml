@@ -14,17 +14,15 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    # against oldest supported glibc
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Rust
-        run: |
-          rustup update stable
-          rustup default stable
-          rustup target add x86_64-unknown-linux-musl
+        run: rustup update stable && rustup default stable
 
       - uses: actions/cache@v6
         with:
@@ -32,20 +30,23 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-musl-cargo-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
 
       - name: Test
         run: cargo test --locked
 
-      - name: Build static binary
-        run: cargo build --release --locked --target x86_64-unknown-linux-musl
+      - name: Build
+        run: cargo build --release --locked
 
       - name: Check the artifact
         run: |
-          BIN=target/x86_64-unknown-linux-musl/release/chromium-gamma-patcher
+          BIN=target/release/chromium-gamma-patcher
+          getconf GNU_LIBC_VERSION
           file "$BIN"
-          if ldd "$BIN" 2>&1 | grep -q '=>'; then
-            echo "::error::binary is dynamically linked"
+          # App loads Wayland/X11/EGL with
+          # dlopen, statically linked cannot do that.
+          if ! ldd "$BIN" | grep -q 'libc\.so'; then
+            echo "::error::not a dynamically linked glibc binary - the window would fail to start"
             exit 1
           fi
           "$BIN" --help
@@ -53,9 +54,9 @@ jobs:
       - name: Package
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          NAME="chromium-gamma-patcher-$TAG-x86_64-linux-musl"
+          NAME="chromium-gamma-patcher-$TAG-x86_64-linux"
           mkdir -p "dist/$NAME"
-          cp target/x86_64-unknown-linux-musl/release/chromium-gamma-patcher "dist/$NAME/"
+          cp target/release/chromium-gamma-patcher "dist/$NAME/"
           cp README.md LICENSE assets/NOTICE.md "dist/$NAME/"
           tar -C dist -czf "dist/$NAME.tar.gz" "$NAME"
           cd dist
@@ -67,8 +68,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          NOTES="Linux x86_64, glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+).
+          The window needs X11 or Wayland with OpenGL. scan, patch and restore work headless."
           gh release create "$TAG" \
             dist/*.tar.gz \
             dist/*.tar.gz.sha256 \
             --title "$TAG" \
-            --generate-notes
+            --notes "$NOTES"
