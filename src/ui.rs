@@ -302,9 +302,9 @@ impl App {
         app
     }
 
-    /// The last few log lines, which is all the box shows.
+    /// Scroll lines
     fn log_tail(&self) -> String {
-        let from = self.log.len().saturating_sub(4);
+        let from = self.log.len().saturating_sub(100);
         self.log[from..].join("\n")
     }
 
@@ -674,52 +674,64 @@ impl App {
                     self.add_path(ctx);
                 }
                 boxed(&mut cui, width - 8.0, LOG_H, |ui| {
-                    let mut text = self.log_tail();
-                    let out = egui::TextEdit::multiline(&mut text)
-                        .font(mono(11.0))
-                        .desired_width(f32::INFINITY)
-                        .desired_rows(3)
-                        .frame(false)
-                        .show(ui);
-                    if let Some(range) = out
-                        .cursor_range
-                        .filter(|r| r.primary.index != r.secondary.index)
-                    {
-                        let a = range.primary.index.min(range.secondary.index);
-                        let b = range.primary.index.max(range.secondary.index);
-                        self.log_sel = text.chars().skip(a).take(b - a).collect();
-                        self.log_range = Some((a, b));
-                    } else if out.response.clicked() {
-                        self.log_sel.clear();
-                        self.log_range = None;
-                    } else if egui::Popup::is_any_open(ui.ctx()) {
-                        if let Some((a, b)) = self.log_range {
-                            let id = out.response.id;
-                            if let Some(mut state) =
-                                egui::widgets::text_edit::TextEditState::load(ui.ctx(), id)
+                    egui::ScrollArea::vertical()
+                        .id_salt("log")
+                        .max_height(LOG_H - 8.0)
+                        .auto_shrink([false, false])
+                        .stick_to_bottom(true)
+                        .show(ui, |ui| {
+                            let mut text = self.log_tail();
+                            let out = egui::TextEdit::multiline(&mut text)
+                                .font(mono(11.0))
+                                .desired_width(f32::INFINITY)
+                                .desired_rows(3)
+                                .frame(false)
+                                .show(ui);
+                            if let Some(range) = out
+                                .cursor_range
+                                .filter(|r| r.primary.index != r.secondary.index)
                             {
-                                state.cursor.set_char_range(Some(egui::text::CCursorRange::two(
-                                    egui::text::CCursor::new(a),
-                                    egui::text::CCursor::new(b),
-                                )));
-                                state.store(ui.ctx(), id);
+                                let a = range.primary.index.min(range.secondary.index);
+                                let b = range.primary.index.max(range.secondary.index);
+                                self.log_sel = text.chars().skip(a).take(b - a).collect();
+                                self.log_range = Some((a, b));
+                            } else if out.response.clicked() {
+                                self.log_sel.clear();
+                                self.log_range = None;
+                            } else if egui::Popup::is_any_open(ui.ctx()) {
+                                if let Some((a, b)) = self.log_range {
+                                    let id = out.response.id;
+                                    if let Some(mut state) =
+                                        egui::widgets::text_edit::TextEditState::load(ui.ctx(), id)
+                                    {
+                                        state.cursor.set_char_range(Some(
+                                            egui::text::CCursorRange::two(
+                                                egui::text::CCursor::new(a),
+                                                egui::text::CCursor::new(b),
+                                            ),
+                                        ));
+                                        state.store(ui.ctx(), id);
+                                    }
+                                }
                             }
-                        }
-                    }
-                    out.response.context_menu(|ui| {
-                        // Menu highlight only: the same navy as the target list.
-                        ui.style_mut().visuals.override_text_color = None;
-                        ui.style_mut().visuals.widgets.hovered.weak_bg_fill = NAVY;
-                        ui.style_mut().visuals.widgets.hovered.fg_stroke =
-                            Stroke::new(1.0, LIGHT);
-                        if ui
-                            .add_enabled(!self.log_sel.is_empty(), egui::Button::new("Copy"))
-                            .clicked()
-                        {
-                            ui.ctx().copy_text(self.log_sel.clone());
-                            ui.close();
-                        }
-                    });
+                            out.response.context_menu(|ui| {
+                                // Menu highlight only: the same navy as the target list.
+                                ui.style_mut().visuals.override_text_color = None;
+                                ui.style_mut().visuals.widgets.hovered.weak_bg_fill = NAVY;
+                                ui.style_mut().visuals.widgets.hovered.fg_stroke =
+                                    Stroke::new(1.0, LIGHT);
+                                if ui
+                                    .add_enabled(
+                                        !self.log_sel.is_empty(),
+                                        egui::Button::new("Copy"),
+                                    )
+                                    .clicked()
+                                {
+                                    ui.ctx().copy_text(self.log_sel.clone());
+                                    ui.close();
+                                }
+                            });
+                        });
                 });
                 cui.add_space(10.0);
 
