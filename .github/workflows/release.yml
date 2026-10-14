@@ -68,8 +68,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          NOTES="Linux x86_64, glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+).
-          The window needs X11 or Wayland with OpenGL. scan, patch and restore work headless."
+          NOTES="glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+)"
           gh release create "$TAG" \
             dist/*.tar.gz \
             dist/*.tar.gz.sha256 \
