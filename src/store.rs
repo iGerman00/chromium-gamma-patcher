@@ -51,6 +51,14 @@ fn now_ts() -> u64 {
         .unwrap_or(0)
 }
 
+/// `sudo -E` runs would otherwise leave root-owned files in the user's config
+/// dir, which then break pinning from a normal run. Hand them to the invoker.
+fn chown_to_invoker(path: &Path) {
+    let uid = std::env::var("SUDO_UID").ok().and_then(|v| v.parse().ok());
+    let gid = std::env::var("SUDO_GID").ok().and_then(|v| v.parse().ok());
+    let _ = std::os::unix::fs::chown(path, uid, gid);
+}
+
 /// One applied patch.
 #[derive(Clone, Debug)]
 pub struct Entry {
@@ -103,23 +111,31 @@ impl Store {
     fn save_bookmarks(&self) -> std::io::Result<()> {
         let dir = config_dir();
         std::fs::create_dir_all(&dir)?;
+        chown_to_invoker(&dir);
         let mut out = String::from("# chromium-gamma-patcher bookmarks - one path per line\n");
         for b in &self.bookmarks {
             out.push_str(&b.to_string_lossy());
             out.push('\n');
         }
-        std::fs::write(dir.join("bookmarks.txt"), out)
+        let file = dir.join("bookmarks.txt");
+        std::fs::write(&file, out)?;
+        chown_to_invoker(&file);
+        Ok(())
     }
 
     fn save_entries(&self) -> std::io::Result<()> {
         let dir = config_dir();
         std::fs::create_dir_all(&dir)?;
+        chown_to_invoker(&dir);
         let mut out = String::from("# path\torig_hash\tpatched_hash\tpairs\tgamma\tcontrast\tbackup\tts\n");
         for e in &self.entries {
             out.push_str(&e.encode());
             out.push('\n');
         }
-        std::fs::write(dir.join("state.tsv"), out)
+        let file = dir.join("state.tsv");
+        std::fs::write(&file, out)?;
+        chown_to_invoker(&file);
+        Ok(())
     }
 
     pub fn save(&self) -> std::io::Result<()> {
@@ -127,23 +143,21 @@ impl Store {
         self.save_entries()
     }
 
-    pub fn add_bookmark(&mut self, path: &Path) -> bool {
+    pub fn add_bookmark(&mut self, path: &Path) -> std::io::Result<bool> {
         if self.bookmarks.iter().any(|p| p == path) {
-            return false;
+            return Ok(false);
         }
         self.bookmarks.push(path.to_path_buf());
-        let _ = self.save_bookmarks();
-        true
+        self.save_bookmarks().map(|_| true)
     }
 
-    pub fn remove_bookmark(&mut self, path: &Path) -> bool {
+    pub fn remove_bookmark(&mut self, path: &Path) -> std::io::Result<bool> {
         let before = self.bookmarks.len();
         self.bookmarks.retain(|p| p != path);
-        let changed = self.bookmarks.len() != before;
-        if changed {
-            let _ = self.save_bookmarks();
+        if self.bookmarks.len() == before {
+            return Ok(false);
         }
-        changed
+        self.save_bookmarks().map(|_| true)
     }
 
     pub fn is_bookmarked(&self, path: &Path) -> bool {

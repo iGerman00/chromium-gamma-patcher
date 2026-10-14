@@ -462,12 +462,14 @@ impl App {
         let Some(row) = self.rows.get(i) else { return };
         let path = row.path.clone();
         let label = row.label.clone();
-        if self.store.is_bookmarked(&path) {
-            self.store.remove_bookmark(&path);
-            self.log_line(format!("unpinned {label}"));
+        let (result, verb) = if self.store.is_bookmarked(&path) {
+            (self.store.remove_bookmark(&path), "unpinned")
         } else {
-            self.store.add_bookmark(&path);
-            self.log_line(format!("pinned {label}"));
+            (self.store.add_bookmark(&path), "pinned")
+        };
+        self.log_line(format!("{verb} {label}"));
+        if let Err(e) = result {
+            self.log_line(format!("not saved: {e}"));
         }
         let pinned = self.store.is_bookmarked(&path);
         if let Some(r) = self.rows.get_mut(i) {
@@ -485,7 +487,10 @@ impl App {
             self.log_line(format!("not a file: {}", path.display()));
             return;
         }
-        self.store.add_bookmark(&path);
+        if let Err(e) = self.store.add_bookmark(&path) {
+            self.log_line(format!("pinned {} - not saved: {e}", short_path(&path.to_string_lossy())));
+            return;
+        }
         self.path_input.clear();
         self.log_line(format!("pinned {}", short_path(&path.to_string_lossy())));
         self.rescan(ctx);
