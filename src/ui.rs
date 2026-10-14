@@ -799,12 +799,13 @@ impl App {
     fn screenshot_hook(&mut self, ctx: &Context) {
         let Some(path) = self.screenshot.clone() else { return };
         self.frames += 1;
-        if self.frames == 30 && !self.shot_sent {
+        if !self.shot_sent {
+            if self.frames < 30 {
+                ctx.request_repaint();
+                return;
+            }
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
             self.shot_sent = true;
-        }
-        if !self.shot_sent {
-            return;
         }
         let image = ctx.input(|i| {
             i.events.iter().find_map(|e| match e {
