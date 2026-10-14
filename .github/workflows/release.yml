@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: existing tag to publish
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Rust
+        run: |
+          rustup update stable
+          rustup default stable
+          rustup target add x86_64-unknown-linux-musl
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-musl-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build static binary
+        run: cargo build --release --locked --target x86_64-unknown-linux-musl
+
+      - name: Check the artifact
+        run: |
+          BIN=target/x86_64-unknown-linux-musl/release/chromium-gamma-patcher
+          file "$BIN"
+          if ldd "$BIN" 2>&1 | grep -q '=>'; then
+            echo "::error::binary is dynamically linked"
+            exit 1
+          fi
+          "$BIN" --help
+
+      - name: Package
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          NAME="chromium-gamma-patcher-$TAG-x86_64-linux-musl"
+          mkdir -p "dist/$NAME"
+          cp target/x86_64-unknown-linux-musl/release/chromium-gamma-patcher "dist/$NAME/"
+          cp README.md LICENSE assets/NOTICE.md "dist/$NAME/"
+          tar -C dist -czf "dist/$NAME.tar.gz" "$NAME"
+          cd dist
+          sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+          cat "$NAME.tar.gz.sha256"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          gh release create "$TAG" \
+            dist/*.tar.gz \
+            dist/*.tar.gz.sha256 \
+            --title "$TAG" \
+            --generate-notes
