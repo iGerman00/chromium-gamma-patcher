@@ -1,6 +1,13 @@
 # Chromium gamma patcher
 
 <div align="center">
+
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/iGerman00/chromium-gamma-patcher?style=flat-square)
+[![GitHub](https://img.shields.io/github/license/iGerman00/chromium-gamma-patcher?style=flat-square&color=green)](LICENSE)
+
+</div>
+
+<div align="center">
   <img src="assets/screenshot.png" width="400" />
 </div>
 
@@ -12,20 +19,9 @@ Chromium on Linux returns contrast=0.2 and gamma=1.2 for text in all Electron ap
 
 The patcher directly alters immediates located by their bytes, so anything Chromium should work and only 4 bytes of each are overwritten.
 
-## Build and run
+## Run
 
-    cargo build --release
-    ./target/release/chromium-gamma-patcher          # gui
-    ./target/release/chromium-gamma-patcher scan     # target list on stdout
-
-Targets under `/opt` or `/usr` are root-owned. You will need to run the patcher as sudo to patch those, note the `-E` flag to preserve the env:
-
-    sudo -E ./target/release/chromium-gamma-patcher
-
-Headless for scripts:
-
-    sudo -E <binary> patch   /opt/google/chrome/chrome 1.8 0.2
-    sudo -E <binary> restore /opt/google/chrome/chrome
+Get the latest binary from [releases](https://github.com/iGerman00/chromium-gamma-patcher/releases/latest) and simply run it.
 
 ## Using it
 
@@ -56,6 +52,21 @@ If the patcher is dead for some reason you can always restore the copy on your o
 I only verified this on my workstation - x86_64, KDE Plasma 6, Endeavour OS, Vivaldi browser.
 
 This is very unlikely to work on any other architectures. PRs welcome for other platforms, but I don't really have the means to test them.
+
+## Build and run
+
+    cargo build --release
+    ./target/release/chromium-gamma-patcher          # gui
+    ./target/release/chromium-gamma-patcher scan     # target list on stdout
+
+Targets under `/opt` or `/usr` are root-owned. You will need to run the patcher as sudo to patch those, note the `-E` flag to preserve the env:
+
+    sudo -E ./target/release/chromium-gamma-patcher
+
+Headless for scripts:
+
+    sudo -E <binary> patch   /opt/google/chrome/chrome 1.8 0.2
+    sudo -E <binary> restore /opt/google/chrome/chrome
 
 ## AI disclosure
 
